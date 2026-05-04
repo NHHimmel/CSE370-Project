@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Send, Inbox, Star, Trash2, X, Search } from 'lucide-react'
 import api from '../api/axios'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useAuth } from '../context/AuthContext'
 
 function RecommCard({ rec, onDelete, type }) {
   return (
@@ -67,7 +68,10 @@ function SendModal({ onClose, onSent }) {
     setSending(true)
     setError('')
     try {
-      await api.post('/recommendations', { receiver_id: receiverId, media_id: selectedMedia.media_id })
+      await api.post('/recommendations', {
+        receiver_id: receiverId.trim(),
+        media_id: selectedMedia.media_id.trim(),
+      })
       onSent()
       onClose()
     } catch (e) {
@@ -150,14 +154,17 @@ function SendModal({ onClose, onSent }) {
 }
 
 export default function Recommendations() {
+  const { user } = useAuth()
   const [tab,      setTab]      = useState('received')
   const [received, setReceived] = useState([])
   const [sent,     setSent]     = useState([])
   const [loading,  setLoading]  = useState(true)
   const [modal,    setModal]    = useState(false)
+  const [error,    setError]    = useState('')
 
   const fetchData = async () => {
     setLoading(true)
+    setError('')
     try {
       const [rRes, sRes] = await Promise.all([
         api.get('/recommendations/received'),
@@ -165,12 +172,16 @@ export default function Recommendations() {
       ])
       setReceived(rRes.data)
       setSent(sRes.data)
+    } catch (e) {
+      setReceived([])
+      setSent([])
+      setError(e.response?.data?.detail || 'Failed to load recommendations.')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [user?.user_id])
 
   const deleteRec = async (receiverId, mediaId) => {
     await api.delete(`/recommendations/${receiverId}/${mediaId}`)
@@ -208,7 +219,12 @@ export default function Recommendations() {
         ))}
       </div>
 
-      {loading ? (
+      {error ? (
+        <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-300"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          {error}
+        </div>
+      ) : loading ? (
         <LoadingSpinner text="Loading…" />
       ) : items.length === 0 ? (
         <div className="text-center py-16">
